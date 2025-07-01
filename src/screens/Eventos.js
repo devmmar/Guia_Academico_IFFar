@@ -63,15 +63,15 @@ export default function Eventos({ navigation }) {
     <LinearGradient colors={['#dff5eb', '#ffffff']} style={{ flex: 1 }}>
       <SafeAreaView style={styles.container}>
         <View style={styles.titulo}>
-                    <TouchableOpacity style={styles.voltar} onPress={() => navigation.goBack()}>
-                        <MaterialCommunityIcons name="arrow-left" size={35} color="#1C9B5E" />
-                    </TouchableOpacity>
-                    <Text style={styles.tituloPrin}>Eventos</Text>
+          <TouchableOpacity style={styles.voltar} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons name="arrow-left" size={35} color="#1C9B5E" />
+          </TouchableOpacity>
+          <Text style={styles.tituloPrin}>Eventos</Text>
 
-                    <View style={styles.Ghost}>
+          <View style={styles.Ghost}>
 
-                    </View>
-                </View>
+          </View>
+        </View>
         <ScrollView style={styles.scrool}>
           {carregando && <ActivityIndicator animating />}
           {!carregando && eventos.length === 0 && <Text style={styles.tituloRegis}>Não tem registros</Text>}
@@ -125,42 +125,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   titulo: {
-        fontSize: 20,
-        marginBottom: 25,
-        marginTop: 25,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    fontSize: 20,
+    marginBottom: 25,
+    marginTop: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 40,
+  },
 
-    tituloPrin: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        borderBottomWidth: 3,
-        borderBottomColor: '#1C9B5E'
-    },
+  tituloPrin: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    borderBottomWidth: 3,
+    borderBottomColor: '#1C9B5E',
+  },
 
-    tituloRegis: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        borderBottomWidth: 3,
-        borderBottomColor: '#1C9B5E',
-        width: 156
-    },
+  tituloRegis: {
+    marginTop: 20,
+    fontSize: 20,
+    fontWeight: 'bold',
+    borderBottomWidth: 3,
+    borderBottomColor: '#1C9B5E',
+    width: 156
+  },
 
-    voltar: {
-        marginBottom: 10,
-        width: 130
-    },
-    voltarTexto: {
-        color: '#1C9B5E',
-        fontSize: 35,
-        fontWeight: 'bold',
-    },
+  voltar: {
+    marginBottom: 10,
+    width: 150
+  },
+  voltarTexto: {
+    color: '#1C9B5E',
+    fontSize: 35,
+    fontWeight: 'bold',
+  },
 
-    Ghost: {
-        width: 130
-    },
+  Ghost: {
+    width: 150
+  },
   scrool: {
     width: '90%',
   },

@@ -7,16 +7,28 @@ export function EventosProvider({ children }) {
   const [eventos, setEventos] = useState([]);
   const [carregandoEventos, setCarregandoEventos] = useState(true);
 
-  // 🔄 Carrega apenas eventos ativos
   const carregarEventos = useCallback(async () => {
     setCarregandoEventos(true);
+
     const { data, error } = await supabase
       .from('eventos')
-      .select('*')
-      .eq('ativo', true); // ← Apenas eventos ativos
+      .select(`
+        *,
+        curtidas(count),
+        comentarios(count),
+        fotos_evento(count)
+      `)
+      .eq('ativo', true);
 
-    if (!error) {
-      setEventos(data);
+    if (!error && data) {
+      const eventosComTotais = data.map(ev => ({
+        ...ev,
+        totalCurtidas: ev.curtidas?.[0]?.count || 0,
+        totalComentarios: ev.comentarios?.[0]?.count || 0,
+        totalFotos: ev.fotos_evento?.[0]?.count || 0
+      }));
+
+      setEventos(eventosComTotais);
     } else {
       console.log('Erro ao buscar eventos:', error);
     }
@@ -28,7 +40,6 @@ export function EventosProvider({ children }) {
     carregarEventos();
   }, [carregarEventos]);
 
-  // 🔁 Atualiza um evento individual (ex: edição ou encerramento)
   const atualizarEventoAtualizado = useCallback((eventoAtualizado) => {
     setEventos((anteriores) =>
       anteriores.map((ev) =>
@@ -37,7 +48,6 @@ export function EventosProvider({ children }) {
     );
   }, []);
 
-  // 🛑 Marca evento como encerrado no banco e remove da lista local
   const encerrarEvento = useCallback(async (id) => {
     const { data, error } = await supabase
       .from('eventos')
@@ -51,9 +61,7 @@ export function EventosProvider({ children }) {
       return { sucesso: false, erro };
     }
 
-    // remove localmente da lista de ativos
     setEventos((anteriores) => anteriores.filter((ev) => ev.id !== id));
-
     return { sucesso: true, eventoAtualizado: data };
   }, []);
 

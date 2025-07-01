@@ -1,29 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView, StyleSheet, ScrollView, Alert, View, TouchableOpacity } from 'react-native';
 import { Text, ActivityIndicator, FAB } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import CursosCard from './CursosCard';
 import { supabase } from '../config/supabase';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useCursos } from '../contexto/CursosContexto';
 
 export default function Cursos({ navigation }) {
-  const [cursos, setCursos] = useState([]);
-  const [carregando, setCarregando] = useState(true);
+  const { cursos, carregarCursos, removerCurso, carregandoCursos } = useCursos();
   const [tipoUsuario, setTipoUsuario] = useState('');
 
   useEffect(() => {
-    async function buscarCursos() {
-      const { data, error } = await supabase.from('cursos').select('*');
-
-      if (error) {
-        console.log(error);
-      } else {
-        setCursos(data);
-      }
-
-      setCarregando(false);
-    }
-
     async function buscarTipoUsuario() {
       const { data: userData, error: erroUser } = await supabase.auth.getUser();
 
@@ -48,8 +37,13 @@ export default function Cursos({ navigation }) {
     }
 
     buscarTipoUsuario();
-    buscarCursos();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarCursos();
+    }, [carregarCursos])
+  );
 
   function handleNovoCurso() {
     if (tipoUsuario === 'admin') {
@@ -70,7 +64,7 @@ export default function Cursos({ navigation }) {
           if (error) {
             Alert.alert('Erro', 'Não foi possível excluir o curso.');
           } else {
-            setCursos((prev) => prev.filter((curso) => curso.id !== id));
+            removerCurso(id); // Atualiza no contexto
           }
         },
       },
@@ -85,17 +79,17 @@ export default function Cursos({ navigation }) {
             <MaterialCommunityIcons name="arrow-left" size={35} color="#1C9B5E" />
           </TouchableOpacity>
           <Text style={styles.tituloPrin}>Cursos</Text>
-
-          <View style={styles.Ghost}>
-
-          </View>
+          <View style={styles.Ghost}></View>
         </View>
+
         <ScrollView style={styles.scrool}>
-          {carregando && <ActivityIndicator animating />}
-          {!carregando && cursos.length === 0 && <Text>Não tem registros</Text>}
-          {cursos.map((curso, index) => (
+          {carregandoCursos && <ActivityIndicator animating />}
+          {!carregandoCursos && cursos.length === 0 && (
+            <Text style={{ textAlign: 'center', marginTop: 20 }}>Nenhum curso disponível.</Text>
+          )}
+          {cursos.map((curso) => (
             <CursosCard
-              key={index}
+              key={curso.id}
               {...curso}
               tipoUsuario={tipoUsuario}
               onPress={() => navigation.navigate('DetalheCurso', curso)}
@@ -120,25 +114,16 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 20,
     marginBottom: 25,
-    marginTop: 25,
+    marginTop: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   tituloPrin: {
     fontSize: 20,
     fontWeight: 'bold',
     borderBottomWidth: 3,
-    borderBottomColor: '#1C9B5E'
-  },
-
-  tituloRegis: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    borderBottomWidth: 3,
     borderBottomColor: '#1C9B5E',
-    width: 156
   },
   scrool: {
     width: '90%',
@@ -149,18 +134,11 @@ const styles = StyleSheet.create({
     bottom: 20,
     right: 20,
   },
-
   voltar: {
-        marginBottom: 10,
-        width: 130
-    },
-    voltarTexto: {
-        color: '#1C9B5E',
-        fontSize: 35,
-        fontWeight: 'bold',
-    },
-
-    Ghost: {
-        width: 130
-    },
+    marginBottom: 10,
+    width: 150,
+  },
+  Ghost: {
+    width: 150,
+  },
 });

@@ -21,9 +21,12 @@ export default function EventosCard({
     tipoUsuario,
     statusPersonalizado = '',           // ← NOVO: define o texto fixo do status
     podeCancelarInscricao = true,
+    totalCurtidas = 0,
+    totalComentarios = 0
 }) {
     const [usuarioInscrito, setUsuarioInscrito] = useState(false);
     const [carregandoInscricao, setCarregandoInscricao] = useState(true);
+    const [totalFotos, setTotalFotos] = useState(0);
     const vagasDisponiveis = vagas_disponiveis != null ? vagas_disponiveis : total_vagas;
 
     // Verificação de data encerrada
@@ -61,7 +64,7 @@ export default function EventosCard({
         if (!dataString) return '';
         const data = new Date(dataString);
         const dia = String(data.getUTCDate()).padStart(2, '0');
-        const mesesNome = String(data.getMonth() + 1 ).padStart(2, '0');
+        const mesesNome = String(data.getMonth() + 1).padStart(2, '0');
         const ano = data.getFullYear();
 
         return `${dia}/${mesesNome}/${ano}`;
@@ -95,7 +98,17 @@ export default function EventosCard({
                 setCarregandoInscricao(false);
             }
 
+            async function buscarTotalFotos() {
+                const { count } = await supabase
+                    .from('fotos_evento') // 🟢 Substitua pelo nome correto da tabela
+                    .select('*', { count: 'exact', head: true })
+                    .eq('evento_id', id);
+
+                if (count !== null) setTotalFotos(count);
+            }
+
             verificarInscricao();
+             buscarTotalFotos();
         }, [id])
     );
 
@@ -116,13 +129,24 @@ export default function EventosCard({
                             {' '}Data: {formatarDataLegivel(data)}
                         </Text>
                         <Text>
-                            <MaterialCommunityIcons name='pin' size={15} color={'#1C9B5E'} />
-                            {' '}Local: {local}
-                        </Text>
-                        <Text>
                             <MaterialCommunityIcons name='account-group' size={15} color={'#1C9B5E'} />
                             {' '}Vagas: {vagasDisponiveis} / {total_vagas}
                         </Text>
+
+                        <View style={styles.socialRow}>
+                            <View style={styles.socialItem}>
+                                <MaterialCommunityIcons name="heart-outline" size={18} color="#C4112F" />
+                                <Text style={styles.socialText}>{totalCurtidas}</Text>
+                            </View>
+                            <View style={styles.socialItem}>
+                                <MaterialCommunityIcons name="comment-outline" size={18} color="#000" />
+                                <Text style={styles.socialText}>{totalComentarios}</Text>
+                            </View>
+                            <View style={styles.socialItem}>
+                                <MaterialCommunityIcons name="image-outline" size={18} color="#1C9B5E" />
+                                <Text style={styles.socialText}>{totalFotos}</Text>
+                            </View>
+                        </View>
                     </View>
 
 
@@ -176,10 +200,25 @@ const styles = StyleSheet.create({
     },
 
     GhostOne: {
-        width: '50%'
+        width: '60%'
     },
 
     GhostTree: {
-        width: '50%'
-    }
+        width: '40%'
+    },
+
+    socialRow: {
+        marginTop: 10,
+        flexDirection: 'row',
+        gap: 20,
+        alignItems: 'center',
+    },
+    socialItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    socialText: {
+        fontWeight: 'bold',
+    },
 });

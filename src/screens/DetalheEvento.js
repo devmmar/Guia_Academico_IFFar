@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import MapView, { Marker } from 'react-native-maps';
 import * as Calendar from 'expo-calendar';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import emailjs from 'emailjs-com';
 
 export default function DetalheEventos({ route, navigation }) {
   const {
@@ -30,6 +31,7 @@ export default function DetalheEventos({ route, navigation }) {
   const [usuarioInscrito, setUsuarioInscrito] = useState(false);
   const [curtido, setCurtido] = useState(false);
   const [totalCurtidas, setTotalCurtidas] = useState(0);
+  const [totalFotos, setTotalFotos] = useState(0);
   const [mostrarComentarios, setMostrarComentarios] = useState(false);
   const [usuarioLogadoId, setUsuarioLogadoId] = useState(null);
   const [comentarioTexto, setComentarioTexto] = useState('');
@@ -171,6 +173,42 @@ export default function DetalheEventos({ route, navigation }) {
     carregarDadosEvento();
 
     await adicionarEventoAoCalendario(titulo, local, data);
+
+    try {
+      const resposta = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer re_L1gBv6XV_GsU69TH8XkQB9HdwriihFHgD', // ⬅️ nova API KEY
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'onboarding@resend.dev', // ⬅️ domínio verificado
+          to: user.email, // ou `"${user.nome} <${user.email}>"`
+          subject: `Inscrição confirmada: ${titulo}`,
+          html: `
+        <div style="font-family: Arial, sans-serif;">
+          <h2>Inscrição Confirmada ✅</h2>
+          <p>Olá, ${user.nome}!</p>
+          <p>Você se inscreveu no evento <strong>${titulo}</strong>.</p>
+          <p>Nos vemos lá!</p>
+        </div>
+      `
+        })
+      });
+
+      const resultado = await resposta.text();
+      console.log('📨 Resposta da Resend:', resposta.status, resultado);
+
+      if (!resposta.ok) {
+        Alert.alert('Erro ao enviar e-mail', resultado);
+      }
+    } catch (error) {
+      console.error('❌ Erro no envio:', error);
+      Alert.alert('Erro', 'Não foi possível enviar o e-mail.');
+    }
+
+
+
   }
 
   async function adicionarEventoAoCalendario(titulo, local, data) {
@@ -274,6 +312,16 @@ export default function DetalheEventos({ route, navigation }) {
       if (inscricaoExistente) setUsuarioInscrito(true);
     }
 
+    async function buscarTotalFotos() {
+      const { count } = await supabase
+        .from('fotos_evento') // 🟢 Substitua pelo nome correto da tabela
+        .select('*', { count: 'exact', head: true })
+        .eq('evento_id', id);
+
+      if (count !== null) setTotalFotos(count);
+    }
+
+    buscarTotalFotos();
     verificarInscricao();
     carregarDadosEvento();
   }, []);
@@ -306,18 +354,25 @@ export default function DetalheEventos({ route, navigation }) {
 
               <Divider style={styles.divisor} />
               <Text style={{ marginBottom: 10 }}><MaterialCommunityIcons name='pin' size={15} color={'#1C9B5E'} /> Local: {local}</Text>
-              <MapView
-                style={{ width: '100%', height: 200, borderRadius: 10, marginBottom: 20, borderWidth: 1, borderColor: '#1C9B5E' }}
-                initialRegion={{
-                  latitude: latitude || -27.0, // valor padrão caso venha null
-                  longitude: longitude || -53.0,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01
-                }}
-              >
-                <Marker coordinate={{ latitude: Number(latitude), longitude: Number(longitude) }} title={titulo} />
-
-              </MapView>
+              <View style={{
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#1C9B5E',
+                overflow: 'hidden',
+                marginBottom: 20
+              }}>
+                <MapView
+                  style={{ width: '100%', height: 200 }}
+                  initialRegion={{
+                    latitude: latitude || -27.0,
+                    longitude: longitude || -53.0,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01
+                  }}
+                >
+                  <Marker coordinate={{ latitude: Number(latitude), longitude: Number(longitude) }} title={titulo} />
+                </MapView>
+              </View>
               <Text><MaterialCommunityIcons name='calendar' size={15} color={'#1C9B5E'} /> Data: {formatarDataLegivel(data)}</Text>
               <Text><MaterialCommunityIcons name='account-group' size={15} color={'#1C9B5E'} /> Vagas disponíveis: {vagasDisponiveis} / {total_vagas}</Text>
               <Divider style={styles.divisor} />
@@ -373,6 +428,11 @@ export default function DetalheEventos({ route, navigation }) {
                     {comentarios.length}
                   </Text>
                 </TouchableOpacity>
+
+                <View style={styles.likeBtn}>
+                  <MaterialCommunityIcons name="image-outline" size={24} color="#1C9B5E" />
+                  <Text style={{ fontWeight: 'bold' }}>{totalFotos}</Text>
+                </View>
               </View>
 
               {mostrarComentarios && (

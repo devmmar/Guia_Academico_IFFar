@@ -74,7 +74,9 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     titulo: {
-        fontSize: 24,
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: '#1C9B5E',
         textAlign: 'center',
     },
     subtitulo: {

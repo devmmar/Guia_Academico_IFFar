@@ -4,6 +4,15 @@ import { TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../config/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import { Buffer } from 'buffer';
+import { useCursos } from '../contexto/CursosContexto'; // ✅ Correto
+
+// Compatibilidade com base64 no ambiente React Native
+if (typeof atob === 'undefined') {
+  global.atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
+}
 
 export default function NovoCurso({ navigation }) {
   const [nome, setNome] = useState('');
@@ -13,8 +22,48 @@ export default function NovoCurso({ navigation }) {
   const [unidade, setUnidade] = useState('');
   const [duracao, setDuracao] = useState('');
   const [descricao, setDescricao] = useState('');
+  const [pdfUrl, setPdfUrl] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
+
+  const { adicionarCurso } = useCursos(); // ✅ Hook do contexto
+
+  async function selecionarPDF() {
+    const resultado = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+
+    if (resultado.canceled || !resultado.assets) return;
+
+    const uri = resultado.assets[0].uri;
+    const nome = resultado.assets[0].name || `arquivo_${Date.now()}.pdf`;
+
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+
+    const { error } = await supabase.storage.from('eventos').upload(nome, bytes, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
+
+    if (error) {
+      setErro('Erro ao enviar PDF');
+      return;
+    }
+
+    const { data: urlData, error: urlError } = supabase.storage.from('eventos').getPublicUrl(nome);
+
+    if (urlError || !urlData?.publicUrl) {
+      setErro('Erro ao obter URL do PDF');
+      return;
+    }
+
+    setPdfUrl(urlData.publicUrl);
+  }
 
   async function salvarCurso() {
     setCarregando(true);
@@ -26,24 +75,31 @@ export default function NovoCurso({ navigation }) {
       return;
     }
 
-    const { error } = await supabase.from('cursos').insert([{
-      nome: nome.trim(),
-      modalidade: modalidade.trim(),
-      nivel: nivel.trim(),
-      turno: turno.trim(),
-      unidade: unidade.trim(),
-      duracao: duracao.trim(),
-      descricao: descricao.trim(),
-    }]);
-
-    setCarregando(false);
+    const { data, error } = await supabase
+      .from('cursos')
+      .insert([{
+        nome: nome.trim(),
+        modalidade: modalidade.trim(),
+        nivel: nivel.trim(),
+        turno: turno.trim(),
+        unidade: unidade.trim(),
+        duracao: duracao.trim(),
+        descricao: descricao.trim(),
+        arquivo_url: pdfUrl || null,
+      }])
+      .select()
+      .single(); // ✅ para obter o curso recém criado com id
 
     if (error) {
       console.log(error);
       setErro('Erro ao salvar curso.');
-    } else {
-      navigation.goBack();
+      setCarregando(false);
+      return;
     }
+
+    adicionarCurso(data); // ✅ Atualiza a lista do contexto
+    setCarregando(false);
+    navigation.goBack();
   }
 
   return (
@@ -54,6 +110,7 @@ export default function NovoCurso({ navigation }) {
             style={styles.img}
             source={{ uri: 'https://www.iffarroupilha.edu.br/component/k2/attachments/download/2364/d41a992a42da72ea71ecdd799fbfcb3b' }}
           />
+
           <Text style={styles.titulo}>Novo Curso</Text>
 
           <TextInput label="Nome" value={nome} onChangeText={setNome} mode="outlined" style={styles.input} theme={inputTheme} />
@@ -64,7 +121,21 @@ export default function NovoCurso({ navigation }) {
           <TextInput label="Modalidade" value={modalidade} onChangeText={setModalidade} mode="outlined" style={styles.input} theme={inputTheme} />
           <TextInput label="Unidade" value={unidade} onChangeText={setUnidade} mode="outlined" style={styles.input} theme={inputTheme} />
 
+          <Button mode="outlined" onPress={selecionarPDF} style={styles.botao}>
+            {pdfUrl ? 'PDF Selecionado' : 'Adicionar PDF'}
+          </Button>
+
+          {pdfUrl !== '' && (
+            <View style={{ marginTop: 10 }}>
+              <Text style={{ color: 'green' }}>PDF anexado com sucesso</Text>
+              <Text numberOfLines={1} style={{ fontSize: 14, color: 'blue' }}>
+                {pdfUrl.split('/').pop()}
+              </Text>
+            </View>
+          )}
+
           {erro !== '' && <Text style={styles.erro}>{erro}</Text>}
+
           {carregando ? (
             <ActivityIndicator animating />
           ) : (

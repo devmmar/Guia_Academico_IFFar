@@ -6,7 +6,7 @@ import {
   Image,
   TouchableOpacity,
   KeyboardAvoidingView,
-  Platform
+  Platform,
 } from 'react-native';
 import { TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
@@ -18,6 +18,8 @@ import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { Buffer } from 'buffer';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import debounce from 'lodash.debounce';
 
 if (typeof atob === 'undefined') {
   global.atob = (b64) => Buffer.from(b64, 'base64').toString('binary');
@@ -59,6 +61,47 @@ export default function NovoEvento({ navigation }) {
   const [localizacao, setLocalizacao] = useState(null);
   const [fotosSelecionadas, setFotosSelecionadas] = useState([]);
   const [carregandoFoto, setCarregandoFoto] = useState(false);
+  const [sugestoes, setSugestoes] = useState([]);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+
+  const buscarSugestoesEndereco = debounce(async (texto) => {
+    if (!texto.trim()) {
+      setSugestoes([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(texto)}`, {
+        headers: {
+          'User-Agent': 'GuiaIFFar/1.0 (vitor.machado@iffar.edu.br)' // deve ser real e funcional
+        }
+      });
+
+      const contentType = response.headers.get("content-type");
+
+      if (!contentType || !contentType.includes("application/json")) {
+        const erroHTML = await response.text();
+        console.warn("⚠️ Nominatim retornou HTML:", erroHTML.slice(0, 200));
+        return;
+      }
+
+      const data = await response.json();
+      setSugestoes(data);
+      setMostrarSugestoes(true);
+    } catch (error) {
+      console.error('Erro ao buscar sugestões:', error);
+    }
+  }, 600);
+
+  function formatarEnderecoCompleto(displayName) {
+    if (!displayName) return '';
+    const partes = displayName.split(',').map(p => p.trim());
+    const ruaNumero = partes[0] || '';
+    const bairro = partes[1] || '';
+    const cidade = partes[2] || '';
+    return [ruaNumero, bairro, cidade].filter(Boolean).join(', ');
+  }
+
 
   const selecionarImagem = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -166,28 +209,6 @@ export default function NovoEvento({ navigation }) {
     navigation.goBack();
   }
 
-  async function buscarCoordenadas() {
-    if (!local.trim()) {
-      setErro('Digite um endereço válido.');
-      return;
-    }
-
-    try {
-      const resultados = await Location.geocodeAsync(local);
-      if (resultados.length > 0) {
-        const { latitude, longitude } = resultados[0];
-        setLocalizacao({ latitude, longitude });
-        setErro('');
-      } else {
-        setErro('Endereço não encontrado.');
-      }
-    } catch (error) {
-      console.error('Erro ao geocodificar endereço:', error);
-      setErro('Erro ao buscar o endereço no mapa.');
-    }
-  }
-
-
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -204,7 +225,6 @@ export default function NovoEvento({ navigation }) {
     })();
   }, []);
 
-
   return (
     <LinearGradient colors={['#dff5eb', '#ffffff']} style={{ flex: 1 }}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -213,7 +233,7 @@ export default function NovoEvento({ navigation }) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
-          <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
             <View style={styles.section}>
               <TouchableOpacity style={styles.voltar} onPress={() => navigation.goBack()}>
                 <MaterialCommunityIcons name="arrow-left" size={35} color="#1C9B5E" />
@@ -238,41 +258,67 @@ export default function NovoEvento({ navigation }) {
               style={styles.input}
               theme={inputTheme}
             />
-
-
             <TextInput label="Vagas" value={total_vagas} onChangeText={setTotalVagas} keyboardType="numeric" mode="outlined" style={styles.input} theme={inputTheme} />
+
             <TextInput
               label="Endereço"
               value={local}
-              onChangeText={setLocal}
+              onChangeText={(texto) => {
+                setLocal(texto);
+                buscarSugestoesEndereco(texto);
+              }}
               mode="outlined"
-              style={styles.input}
+              style={[styles.input, { marginBottom: 4 }]} // pequena margem extra
               theme={inputTheme}
             />
 
-            <Button
-              mode="outlined"
-              onPress={buscarCoordenadas}
-              style={{ marginBottom: 16 }}
-            >
-              Ver no Mapa
-            </Button>
+            {mostrarSugestoes && sugestoes.length > 0 && (
+              <View style={styles.listaSugestoes}>
+                {sugestoes.map((item) => (
+                  <TouchableOpacity
+                    key={item.place_id}
+                    style={styles.sugestaoItem}
+                    onPress={() => {
+                      setLocal(formatarEnderecoCompleto(item.display_name));
+                      setLocalizacao({
+                        latitude: parseFloat(item.lat),
+                        longitude: parseFloat(item.lon)
+                      });
+                      setMostrarSugestoes(false);
+                      setSugestoes([]);
+                    }}
+                  >
+                    <Text>{formatarEnderecoCompleto(item.display_name)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
             {localizacao && (
-              <MapView
-                style={{ width: '100%', height: 200, marginBottom: 16, borderRadius: 10, borderWidth: 1, borderColor: '#1C9B5E' }}
-                initialRegion={{
-                  latitude: localizacao.latitude,
-                  longitude: localizacao.longitude,
-                  latitudeDelta: 0.01,
-                  longitudeDelta: 0.01,
-                }}
-                onPress={(e) => {
-                  const { latitude, longitude } = e.nativeEvent.coordinate;
-                  setLocalizacao({ latitude, longitude });
-                }}
-              >
-                <Marker coordinate={localizacao} />
-              </MapView>
+              <View style={{
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#1C9B5E',
+                overflow: 'hidden',
+                marginTop: 20,
+                marginBottom: 20
+              }}>
+                <MapView
+                  style={{ width: '100%', height: 250, borderRadius: 10 }}
+                  region={{
+                    latitude: localizacao.latitude,
+                    longitude: localizacao.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }}
+                  onPress={(e) => {
+                    const { latitude, longitude } = e.nativeEvent.coordinate;
+                    setLocalizacao({ latitude, longitude });
+                  }}
+                >
+                  <Marker coordinate={localizacao} />
+                </MapView>
+              </View>
             )}
 
             <Text style={{ marginBottom: 8, fontSize: 16 }}>Inscrição</Text>
@@ -287,7 +333,7 @@ export default function NovoEvento({ navigation }) {
               ))}
             </View>
 
-            <Button mode="outlined" onPress={selecionarImagem} style={{ marginBottom: 10 }}>
+            <Button mode="outlined" onPress={selecionarImagem} style={{ marginBottom: 1 }}>
               Adicionar Imagens
             </Button>
 
@@ -307,7 +353,7 @@ export default function NovoEvento({ navigation }) {
                 Cadastrar Evento
               </Button>
             )}
-          </ScrollView>
+          </KeyboardAwareScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </LinearGradient>
@@ -324,9 +370,7 @@ const inputTheme = {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-  },
+  container: { padding: 20 },
   section: {
     fontSize: 20,
     marginBottom: 25,
@@ -354,13 +398,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   botao: {
-    marginTop: 10,
-    padding: 6,
+    borderRadius: 25,
+    marginTop: 1,
+    padding: 6
   },
   erro: {
     color: 'red',
     marginBottom: 10,
-    textAlign: 'center',
+    textAlign: 'center'
   },
   img: {
     resizeMode: 'contain',
@@ -370,7 +415,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   radioContainer: {
-    marginBottom: 20,
+    marginBottom: 20
   },
   radioItem: {
     flexDirection: 'row',
@@ -388,7 +433,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   radioOuterSelected: {
-    borderColor: '#1C9B5E',
+    borderColor: '#1C9B5E'
   },
   radioInner: {
     height: 10,
@@ -398,6 +443,27 @@ const styles = StyleSheet.create({
   },
   radioLabel: {
     fontSize: 16,
-    color: '#000',
+    color: '#000'
+  },
+  listaSugestoes: {
+    position: 'relative',
+    backgroundColor: '#fff',
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 4,
+    marginBottom: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    zIndex: 100,
+  },
+
+  sugestaoItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
   },
 });
